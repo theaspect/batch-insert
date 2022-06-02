@@ -1,0 +1,17 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '1.5.10'
+}
+
+group 'me.blzr'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib"
+    implementation "mysql:mysql-connector-java:8.0.29"
+    implementation "org.flywaydb:flyway-core:8.5.12"
+    implementation "org.flywaydb:flyway-mysql:8.5.12"
+}
