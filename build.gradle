@@ -10,7 +10,7 @@ repositories {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8" // To fix Closable/AutoClosable conflict
     implementation "mysql:mysql-connector-java:8.0.29"
     implementation "org.flywaydb:flyway-core:8.5.12"
     implementation "org.flywaydb:flyway-mysql:8.5.12"
