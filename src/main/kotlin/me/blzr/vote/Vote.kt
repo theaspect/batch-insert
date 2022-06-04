@@ -11,8 +11,8 @@ data class Vote(
     val time: LocalDateTime
 ) {
     companion object {
-        val birthDayFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
-        val timeFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm:ss")
+        private val birthDayFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+        private val timeFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm:ss")
         fun parse(name: String, birthDay: String, station: String, time: String) =
             Vote(
                 name,

@@ -1,25 +1,26 @@
 package me.blzr.vote
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
 import java.sql.Connection
 import java.sql.Date
 import java.sql.Timestamp
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.function.Consumer
+import java.util.concurrent.Future
+import java.util.function.Function
 import javax.sql.DataSource
 
-class PooledInserter(private val dataSource: DataSource, executors: Int) : Consumer<Collection<Vote>> {
-    private val executorPool = Executors.newFixedThreadPool(executors)
+class PooledInserter(private val dataSource: DataSource, executors: Int) : Function<Collection<Vote>, Future<*>> {
+    // We want thread pool die with application
+    private val executorPool = Executors.newFixedThreadPool(executors, ThreadFactoryBuilder().setDaemon(true).build())
 
-    override fun accept(t: Collection<Vote>) {
+    override fun apply(t: Collection<Vote>): Future<*> =
         executorPool.submit {
             dataSource.connection.use { connection ->
                 scheduleInsert(connection, t)
             }
         }
-    }
 
-    private fun scheduleInsert(connection: Connection, votes: Collection<Vote>) {
+    private fun scheduleInsert(connection: Connection, votes: Collection<Vote>): IntArray =
         connection.prepareStatement(
             "INSERT INTO vote (name, birthDay, station, time) VALUES(?, ?, ?, ?)"
         ).use { statement ->
@@ -33,10 +34,4 @@ class PooledInserter(private val dataSource: DataSource, executors: Int) : Consu
             }
             statement.executeBatch()
         }
-    }
-
-    fun await() {
-        executorPool.shutdown()
-        executorPool.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS)
-    }
 }
