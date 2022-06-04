@@ -1,5 +1,6 @@
 package me.blzr.vote
 
+import com.zaxxer.hikari.HikariDataSource
 import org.flywaydb.core.Flyway
 import org.w3c.dom.Document
 import org.w3c.dom.Element
@@ -7,28 +8,32 @@ import org.w3c.dom.Node
 import java.io.InputStream
 import java.sql.Connection
 import java.sql.Date
-import java.sql.DriverManager
 import java.sql.Timestamp
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.system.exitProcess
 
-
 object Application {
-    lateinit var connection: Connection
+    lateinit var dataSource: HikariDataSource
 
-    fun init(url: String, user: String, password: String) {
-        connection = DriverManager.getConnection(url, user, password)
-        val flyway: Flyway = Flyway.configure().dataSource(url, user, password).load()
+    fun init(url: String, user: String, pass: String) {
+        val flyway: Flyway = Flyway.configure().dataSource(url, user, pass).load()
         flyway.migrate()
+
+        dataSource = with(HikariDataSource()) {
+            jdbcUrl = url
+            username = user
+            password = pass
+            return@with this
+        }
     }
 
-    fun parseDomXml(input: InputStream): Document? {
+    private fun parseDomXml(input: InputStream): Document? {
         val documentBuilderFactory = DocumentBuilderFactory.newInstance()
         val documentBuilder = documentBuilderFactory.newDocumentBuilder()
         return documentBuilder.parse(input)
     }
 
-    fun parseVoter(voter: Node): Vote {
+    private fun parseVoter(voter: Node): Vote {
         val name = voter.attributes.getNamedItem("name").textContent
         val birthDay = voter.attributes.getNamedItem("birthDay").textContent
         val visit = (voter as Element).getElementsByTagName("visit").item(0)
@@ -38,7 +43,7 @@ object Application {
         return Vote.parse(name, birthDay, station, time)
     }
 
-    fun truncate(connection: Connection) {
+    private fun truncate(connection: Connection) {
         timeIt("cleanup") {
             connection.prepareStatement("TRUNCATE TABLE vote").use {
                 it.execute()
@@ -46,7 +51,7 @@ object Application {
         }
     }
 
-    fun insert(connection: Connection, vote: Vote) {
+    private fun insert(connection: Connection, vote: Vote) {
         connection.prepareStatement("INSERT INTO vote (name, birthDay, station, time) VALUES(?, ?, ?, ?)").use {
             it.setString(1, vote.name)
             it.setDate(2, Date.valueOf(vote.birthDay))
@@ -58,7 +63,9 @@ object Application {
     }
 
     fun loadDom(source: String) {
-        truncate(connection)
+        dataSource.connection.use {
+            truncate(it)
+        }
 
         val resource = Application.javaClass.classLoader.getResource(source)
         if (resource == null) {
@@ -83,9 +90,11 @@ object Application {
                         i++
                     }
                 }
-                timeIt("Insert") {
-                    for (voter: Node in childNodes) {
-                        insert(connection, parseVoter(voter))
+                dataSource.connection.use { connection ->
+                    timeIt("Insert") {
+                        for (voter: Node in childNodes) {
+                            insert(connection, parseVoter(voter))
+                        }
                     }
                 }
             }
