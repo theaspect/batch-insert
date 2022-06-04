@@ -2,7 +2,6 @@ package me.blzr.vote
 
 import com.google.common.collect.Sets
 import com.zaxxer.hikari.HikariDataSource
-import one.util.streamex.StreamEx
 import org.flywaydb.core.Flyway
 import java.util.function.Function
 
@@ -24,12 +23,22 @@ object Application {
     fun run(source: String) {
         val resource = getResource(source)
 
-        println("Just Parse via DOM XML")
-        resource.openStream().use { input ->
-            StreamEx
-                .of(DomXmlStream.of(input))
-                .map(Function.identity())
-                .toList()
+        timeIt("Just Parse via DOM XML") {
+            resource.openStream().use { input ->
+                DomXmlStream.of(input)
+                    .toStreamEx()
+                    .map(Function.identity())
+                    .toList()
+            }
+        }
+
+        timeIt("Just Parse via StAX XML") {
+            resource.openStream().use { input ->
+                StaxXmlStream.of(input)
+                    .toStreamEx()
+                    .map(Function.identity())
+                    .toList()
+            }
         }
 
         Sets.cartesianProduct(
