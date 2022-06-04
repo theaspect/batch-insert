@@ -41,13 +41,18 @@ object Application {
             Parser.runTimed(input) {/* No OP */ }
         }
 
-        listOf(1, 10, 20, 50, 100, 200, 500, 1000, 2000).forEach { batch ->
-            println("Batch of $batch")
-            val batchConsumer = BatchConsumer(dataSource, batch)
-            truncate(dataSource)
+        listOf(1, 2, 3).forEach { jobs ->
+            listOf(1, 10, 20, 50, 100, 200, 500, 1000, 2000).forEach { batch ->
+                timeIt("XML Parse for $batch in $jobs") {
+                    val parallelConsumer = PooledInserter(dataSource, jobs)
+                    val batchingConsumer = BatchingConsumer(batch, parallelConsumer)
+                    truncate(dataSource)
 
-            resource.openStream().use { input ->
-                Parser.runTimed(input, batchConsumer)
+                    resource.openStream().use { input ->
+                        Parser.run(input, batchingConsumer)
+                        parallelConsumer.await()
+                    }
+                }
             }
         }
     }

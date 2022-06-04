@@ -31,7 +31,7 @@ object Parser {
         }
     }
 
-    private fun run(inputStream: InputStream, supplier: Consumer<Vote>): Int {
+    fun run(inputStream: InputStream, supplier: Consumer<Vote>): Int {
         val document = parseDomXml(inputStream)
 
         val childNodes = document?.documentElement?.getElementsByTagName("voter")
