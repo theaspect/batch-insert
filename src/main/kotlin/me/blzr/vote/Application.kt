@@ -2,14 +2,8 @@ package me.blzr.vote
 
 import com.zaxxer.hikari.HikariDataSource
 import org.flywaydb.core.Flyway
-import org.w3c.dom.Document
-import org.w3c.dom.Element
-import org.w3c.dom.Node
-import java.io.InputStream
-import java.sql.Connection
-import java.sql.Date
-import java.sql.Timestamp
-import javax.xml.parsers.DocumentBuilderFactory
+import java.net.URL
+import javax.sql.DataSource
 import kotlin.system.exitProcess
 
 object Application {
@@ -27,78 +21,44 @@ object Application {
         }
     }
 
-    private fun parseDomXml(input: InputStream): Document? {
-        val documentBuilderFactory = DocumentBuilderFactory.newInstance()
-        val documentBuilder = documentBuilderFactory.newDocumentBuilder()
-        return documentBuilder.parse(input)
-    }
 
-    private fun parseVoter(voter: Node): Vote {
-        val name = voter.attributes.getNamedItem("name").textContent
-        val birthDay = voter.attributes.getNamedItem("birthDay").textContent
-        val visit = (voter as Element).getElementsByTagName("visit").item(0)
-        val station = visit.attributes.getNamedItem("station").textContent
-        val time = visit.attributes.getNamedItem("time").textContent
-
-        return Vote.parse(name, birthDay, station, time)
-    }
-
-    private fun truncate(connection: Connection) {
+    private fun truncate(dataSource: DataSource) {
         timeIt("cleanup") {
-            connection.prepareStatement("TRUNCATE TABLE vote").use {
-                it.execute()
+            dataSource.connection.use { connection ->
+                connection.prepareStatement("TRUNCATE TABLE vote").use {
+                    it.execute()
+                }
             }
-        }
-    }
-
-    private fun insert(connection: Connection, vote: Vote) {
-        connection.prepareStatement("INSERT INTO vote (name, birthDay, station, time) VALUES(?, ?, ?, ?)").use {
-            it.setString(1, vote.name)
-            it.setDate(2, Date.valueOf(vote.birthDay))
-            it.setInt(3, vote.station)
-            it.setTimestamp(4, Timestamp.valueOf(vote.time))
-
-            it.execute()
         }
     }
 
     fun loadDom(source: String) {
-        dataSource.connection.use {
-            truncate(it)
+        val resource = getResource(source)
+
+        println("Just Parse via DOM XML")
+        resource.openStream().use { input ->
+            truncate(dataSource)
+            Parser.runTimed(input) {/* No OP */ }
         }
 
-        val resource = Application.javaClass.classLoader.getResource(source)
+        listOf(1, 10, 20, 50, 100, 200, 500, 1000, 2000).forEach { batch ->
+            println("Batch of $batch")
+            val batchConsumer = BatchConsumer(dataSource, batch)
+            truncate(dataSource)
+
+            resource.openStream().use { input ->
+                Parser.runTimed(input, batchConsumer)
+            }
+        }
+    }
+
+    private fun getResource(classpath: String): URL {
+        val resource = Application.javaClass.classLoader.getResource(classpath)
         if (resource == null) {
-            println("File $source not found")
+            println("File $classpath not found")
             exitProcess(0)
         }
-
-        resource.openStream().use {
-            val document = timeIt("Load") {
-                parseDomXml(it)
-            }
-
-            val childNodes = document?.documentElement?.getElementsByTagName("voter")
-
-            if (childNodes == null) {
-                println("No child nodes")
-            } else {
-                println("Nodes ${childNodes.length}")
-                timeIt("Iterate") {
-                    var i = 0
-                    for (voter: Node in childNodes) {
-                        i++
-                    }
-                }
-                dataSource.connection.use { connection ->
-                    timeIt("Insert") {
-                        for (voter: Node in childNodes) {
-                            insert(connection, parseVoter(voter))
-                        }
-                    }
-                }
-            }
-        }
+        return resource
     }
 }
 
