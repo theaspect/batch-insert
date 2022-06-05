@@ -6,15 +6,19 @@ import java.sql.Date
 import java.sql.Timestamp
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
 import java.util.function.Function
 import javax.sql.DataSource
 
 class PooledInserter(private val dataSource: DataSource, executors: Int) : Function<Collection<Vote>, Future<*>> {
-    // We want thread pool die with application
-    private val executorPool = Executors.newFixedThreadPool(executors, ThreadFactoryBuilder().setDaemon(true).build())
+    private val executorPool = Executors.newFixedThreadPool(
+        executors,
+        ThreadFactoryBuilder().setNameFormat("consumer-%d").build()
+    )
 
     override fun apply(t: Collection<Vote>): Future<*> =
         executorPool.submit {
+            // println("Accepted batch of ${t.size} in ${Thread.currentThread()}")
             dataSource.connection.use { connection ->
                 scheduleInsert(connection, t)
             }
@@ -32,6 +36,13 @@ class PooledInserter(private val dataSource: DataSource, executors: Int) : Funct
 
                 statement.addBatch()
             }
-            statement.executeBatch()
+            val result = statement.executeBatch()
+            // println("Committed ${votes.size} in ${Thread.currentThread()}")
+            result
         }
+
+    fun join() {
+        executorPool.shutdown()
+        executorPool.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS)
+    }
 }

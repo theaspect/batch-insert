@@ -5,14 +5,13 @@ import org.w3c.dom.Node
 import org.w3c.dom.NodeList
 import java.net.URL
 import java.sql.PreparedStatement
-import java.text.DecimalFormat
 import java.util.stream.Stream
 import javax.sql.DataSource
 
 fun <T> timeIt(message: String = "", callback: () -> T): T {
     val start = System.nanoTime()
     val result = callback.invoke()
-    val delta = DecimalFormat(".2ms").format((System.nanoTime() - start) / 1_000_000)
+    val delta = ((System.nanoTime() - start) / 1_000_000).toInt()
     println("$message $delta")
     return result
 }
@@ -38,8 +37,22 @@ fun getResource(classpath: String): URL =
         ?: throw IllegalStateException("File $classpath not found")
 
 fun truncate(dataSource: DataSource) =
-    timeIt("cleanup") {
-        dataSource.connection.use { connection ->
-            connection.prepareStatement("TRUNCATE TABLE vote").use(PreparedStatement::execute)
+    dataSource.connection.use { connection ->
+        connection.prepareStatement("TRUNCATE TABLE vote").use(PreparedStatement::execute)
+    }
+
+fun truncateTimed(dataSource: DataSource) =
+    timeIt("cleanup") { truncate(dataSource) }
+
+fun getCount(dataSource: DataSource): Long =
+    dataSource.connection.use { connection ->
+        connection.prepareStatement("select count(*) from vote").use { ps ->
+            ps.executeQuery().use { rs ->
+                rs.next()
+                rs.getLong(1)
+            }
         }
     }
+
+fun getCountTimed(dataSource: DataSource): Long =
+    timeIt("Count") { getCount(dataSource) }
