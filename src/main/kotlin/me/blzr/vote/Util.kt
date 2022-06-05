@@ -1,5 +1,8 @@
 package me.blzr.vote
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.scan
 import one.util.streamex.StreamEx
 import org.w3c.dom.Node
 import org.w3c.dom.NodeList
@@ -56,3 +59,9 @@ fun getCount(dataSource: DataSource): Long =
 
 fun getCountTimed(dataSource: DataSource): Long =
     timeIt("Count") { getCount(dataSource) }
+
+fun <T> Flow<T>.chunked(chunkSize: Int) = this
+    .scan(listOf<T>()) { oldItems, newItem ->
+        if (oldItems.size >= chunkSize) listOf(newItem)
+        else oldItems + newItem
+    }.filter { it.size == chunkSize }

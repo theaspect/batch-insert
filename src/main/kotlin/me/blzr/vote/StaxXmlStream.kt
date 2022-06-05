@@ -1,38 +1,15 @@
 package me.blzr.vote
 
+import kotlinx.coroutines.channels.Channel
 import java.io.InputStream
-import java.util.Spliterators.AbstractSpliterator
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.atomic.AtomicLong
-import java.util.function.Consumer
-import java.util.stream.Stream
-import java.util.stream.StreamSupport
 import javax.xml.stream.XMLInputFactory
 import javax.xml.stream.XMLStreamReader
 import javax.xml.stream.events.XMLEvent
 
 
-class StaxXmlStream(val inputStream: InputStream, queueSize: Int) : Thread("Producer") {
-    val queue = ArrayBlockingQueue<Vote>(queueSize)
-    var finished = false
-    val read = AtomicLong(0)
-    val consumed = AtomicLong(0)
-
-    fun getStream(): Stream<Vote> =
-        StreamSupport.stream(object : AbstractSpliterator<Vote>(Long.MAX_VALUE, CONCURRENT or NONNULL or ORDERED) {
-            override fun tryAdvance(action: Consumer<in Vote>): Boolean {
-                if (finished && queue.isEmpty()) {
-                    // println("Finished")
-                    return false
-                }
-
-                consumed.incrementAndGet()
-                action.accept(queue.take())
-                return true
-            }
-        }, false)
-
-    override fun run() {
+object StaxXmlStream {
+    // TODO try to rewrite as iterator with pre-loading and then wrap to channel
+    suspend fun of(inputStream: InputStream, channel: Channel<Collection<Vote>>, chunk: Int) {
         val xmlInputFactory = XMLInputFactory.newInstance()
         val reader: XMLStreamReader = xmlInputFactory.createXMLStreamReader(inputStream)
 
@@ -41,6 +18,8 @@ class StaxXmlStream(val inputStream: InputStream, queueSize: Int) : Thread("Prod
         var birthDay = ""
         var station = ""
         var time = ""
+
+        var buffer = ArrayList<Vote>(chunk)
 
         while (reader.hasNext()) {
             eventType = reader.next()
@@ -67,13 +46,9 @@ class StaxXmlStream(val inputStream: InputStream, queueSize: Int) : Thread("Prod
                 when (reader.name.localPart) {
                     "voter" -> {
                         val vote = Vote.parse(name, birthDay, station, time)
-                        read.incrementAndGet()
-                        // This is just for logging purposes
-                        if (!queue.offer(vote)) {
-                            // println("Queue is full, waiting consumer")
-                            queue.put(vote)
-                        }
-
+                        // Check if buffer full then send and clean
+                        // otherwise do nothing
+                        buffer = addSendAndClean(vote, buffer, channel, chunk)
                         name = ""
                         birthDay = ""
                         station = ""
@@ -82,7 +57,24 @@ class StaxXmlStream(val inputStream: InputStream, queueSize: Int) : Thread("Prod
                 }
             }
         }
+        // Send remaining part
+        if (buffer.size > 0) channel.send(buffer)
+        channel.close()
+    }
 
-        finished = true
+    private suspend fun addSendAndClean(
+        vote: Vote,
+        buffer: ArrayList<Vote>,
+        channel: Channel<Collection<Vote>>,
+        chunk: Int
+    ): ArrayList<Vote> {
+        return if (buffer.size < chunk) {
+            buffer.add(vote)
+            buffer
+        } else {
+            buffer.add(vote)
+            channel.send(buffer)
+            return ArrayList<Vote>(chunk)
+        }
     }
 }
