@@ -32,11 +32,9 @@ object Application {
 
         Sets.cartesianProduct(
             // Jobs
-//            setOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
-            setOf(4, 5),
+            setOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
             // Chunk size
-//            setOf(1, 10, 20, 50, 100, 200, 500, 1000, 2000)
-            setOf(50, 100, 200)
+            setOf(1, 10, 20, 50, 100, 200, 500, 1000, 2000)
         ).forEach { (jobs, chunkSize) ->
             truncate(dataSource)
 

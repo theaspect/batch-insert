@@ -5,3 +5,5 @@ CREATE TABLE IF NOT EXISTS vote(
     station INT,
     time TIMESTAMP
 )
+-- Remove if you want to test write speed
+ENGINE = MEMORY
