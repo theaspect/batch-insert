@@ -10,6 +10,7 @@ import java.net.URL
 import java.sql.PreparedStatement
 import java.util.stream.Stream
 import javax.sql.DataSource
+import javax.xml.stream.XMLStreamReader
 
 fun <T> timeIt(message: String = "", callback: () -> T): T {
     val start = System.nanoTime()
@@ -65,3 +66,15 @@ fun <T> Flow<T>.chunked(chunkSize: Int) = this
         if (oldItems.size >= chunkSize) listOf(newItem)
         else oldItems + newItem
     }.filter { it.size == chunkSize }
+
+operator fun XMLStreamReader.iterator() = Iterable {
+    object : Iterator<XMLStreamReader> {
+        override fun hasNext(): Boolean =
+            this@iterator.hasNext()
+
+        override fun next(): XMLStreamReader {
+            this@iterator.next()
+            return this@iterator
+        }
+    }
+}

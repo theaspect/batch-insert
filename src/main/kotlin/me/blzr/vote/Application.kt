@@ -9,7 +9,6 @@ import java.io.InputStream
 import java.sql.Connection
 import java.sql.Date
 import java.sql.Timestamp
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.system.measureTimeMillis
 
 @ObsoleteCoroutinesApi
@@ -33,21 +32,23 @@ object Application {
 
         Sets.cartesianProduct(
             // Jobs
-            setOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+//            setOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+            setOf(4, 5),
             // Chunk size
-            setOf(1, 10, 20, 50, 100, 200, 500, 1000, 2000)
+//            setOf(1, 10, 20, 50, 100, 200, 500, 1000, 2000)
+            setOf(50, 100, 200)
         ).forEach { (jobs, chunkSize) ->
             truncate(dataSource)
 
-            var total = 0
             val elapsed = measureTimeMillis {
                 resource.openStream().use { inputStream ->
                     runBlocking {
-                        total = runBenchmark(inputStream, jobs, chunkSize)
+                        runBenchmark(inputStream, jobs, chunkSize)
                     }
                 }
             }
 
+            val total = getCount(dataSource)
             println("$jobs\t$chunkSize\t$elapsed\t${total * 1000 / elapsed}")
         }
     }
@@ -55,33 +56,34 @@ object Application {
     @ObsoleteCoroutinesApi
     @ExperimentalCoroutinesApi
     private suspend fun runBenchmark(inputStream: InputStream, jobs: Int, chunkSize: Int) = coroutineScope {
-        val counter = AtomicInteger(0)
-        val start = System.currentTimeMillis()
-
         val channel = Channel<Collection<Vote>>(chunkSize)
         launch {
-            StaxXmlStream.of(inputStream, channel, chunkSize)
-        }
-        val consumer = launch(Dispatchers.IO.limitedParallelism(jobs)) {
-            repeat(jobs) {
-                counter.addAndGet(consumeChannel(channel))
-            }
+            StaxXmlStream(inputStream)
+                .asSequence()
+                .chunked(chunkSize)
+                .forEach {
+                    //println("Sending ${it.size} ${Thread.currentThread()}")
+                    channel.send(it)
+                }
+            channel.close()
+            //println("Finished produce ${Thread.currentThread()}")
         }
 
-        consumer.join()
-        return@coroutineScope counter.get()
+        repeat(jobs) {
+            launch(Dispatchers.IO) {
+                consumeChannel(channel)
+                //println("Finished consume $it ${Thread.currentThread()}")
+            }
+        }
     }
 
-    private suspend fun consumeChannel(channel: Channel<Collection<Vote>>): Int {
-        var counter: Int = 0
-        for (chunk in channel) {
-            dataSource.connection.use {
-                // println("Insert in ${Thread.currentThread()}")
+    private suspend fun consumeChannel(channel: Channel<Collection<Vote>>) {
+        dataSource.connection.use {
+            for (chunk in channel) {
+                //println("Insert ${chunk.size} in ${Thread.currentThread()}")
                 scheduleInsert(it, chunk)
-                counter += chunk.size
             }
         }
-        return counter
     }
 
     private fun scheduleInsert(connection: Connection, votes: Collection<Vote>): IntArray =
