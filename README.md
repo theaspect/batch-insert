@@ -25,3 +25,5 @@ xml template
     ...
 </voters>
 ```
+
+Put files into `src/main/resources`

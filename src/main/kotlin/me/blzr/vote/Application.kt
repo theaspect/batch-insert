@@ -32,9 +32,9 @@ object Application {
 
         Sets.cartesianProduct(
             // Jobs
-            setOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+            setOf(8),
             // Chunk size
-            setOf(1, 10, 20, 50, 100, 200, 500, 1000, 2000)
+            setOf(1000)
         ).forEach { (jobs, chunkSize) ->
             truncate(dataSource)
 
@@ -105,6 +105,7 @@ object Application {
 @ExperimentalCoroutinesApi
 fun main() {
     print("Hello world")
-    Application.init("jdbc:mysql://localhost:3306/db", "root", "pass")
+    // See https://dev.mysql.com/doc/connector-j/5.1/en/connector-j-connp-props-performance-extensions.html
+    Application.init("jdbc:mysql://localhost:3306/db?&rewriteBatchedStatements=true", "root", "pass")
     Application.run("data-0.2M.xml")
 }
